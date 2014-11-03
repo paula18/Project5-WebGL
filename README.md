@@ -89,7 +89,7 @@ height of each fragment. I read a texel and two of its neighbors (the right one 
 and created a perturbed normal in tangent space. This was then transform into eye coordinates and 
 used for diffuse lighting instead of the original normal. 
 
-![alt tag](https://github.com/paula18/Project5-WebGL/blob/master/fifth.PNG)
+![alt tag](https://github.com/paula18/Project5-WebGL/blob/master/six.PNG)
 
 **Rim Lighting**
 
