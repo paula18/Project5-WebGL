@@ -11,11 +11,12 @@ The purpose of this project was to get used to GLSL vertex and fragment shading.
 LINKS
 -------------------------------------------------------------------------------
 
-Sin Wave: paula18.github.io/Project5-WebGL/vert_wave.html
+Sin Wave: http://paula18.github.io/Project5-WebGL/vert_wave.html
 
-My Wave: paula18.github.io/Project5-WebGL/vert_wave_2.html
+My Wave: http://paula18.github.io/Project5-WebGL/vert_wave_2.html
 
 Globe: http://paula18.github.io/Project5-WebGL/frag_globe.html
+
 -------------------------------------------------------------------------------
 PART 1 
 -------------------------------------------------------------------------------
