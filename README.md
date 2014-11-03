@@ -17,6 +17,7 @@ My Wave: http://paula18.github.io/Project5-WebGL/vert_wave_2.html
 
 Globe: http://paula18.github.io/Project5-WebGL/frag_globe.html
 
+Video: https://vimeo.com/110749586
 -------------------------------------------------------------------------------
 PART 1 
 -------------------------------------------------------------------------------
