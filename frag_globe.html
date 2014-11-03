@@ -3,7 +3,7 @@
 <head>
 <title>Fragment Globe</title>
 <meta charset ="utf-8">
-<meta http-equiv="X-UA-Compatible" content="chrome=1">  <!-- Use Chrome Frame in IE --> 
+<meta http-equiv="X-UA-Compatible" content="chrome=1"> <!-- Use Chrome Frame in IE -->
 </head>
 
 <body>
@@ -40,6 +40,7 @@
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
+   
     precision highp float;
 
     //View-Space directional light
@@ -70,29 +71,89 @@
     varying vec3 v_positionMC;          // position in model coordinates
 
     mat3 eastNorthUpToEyeCoordinates(vec3 positionMC, vec3 normalEC);
+    float snoise(vec2 v);
 
     void main(void)
     {
-        // surface normal - normalized after rasterization
+       // surface normal - normalized after rasterization
         vec3 normal = normalize(v_Normal);
         // normalized eye-to-position vector in camera coordinates
         vec3 eyeToPosition = normalize(v_Position);
         
+        //Specular
+        vec3 earthSpec = texture2D(u_EarthSpec, v_Texcoord).rgb;
+        
+        //Bump map
+        float bumpColorCenter = texture2D(u_Bump, v_Texcoord).r;
+        float bumpColorRight = texture2D(u_Bump, vec2(v_Texcoord.s + 1.0/1024.0, v_Texcoord.t)).r;
+        float bumpColorUp = texture2D(u_Bump, vec2(v_Texcoord.s, v_Texcoord.t + 1.0/512.0)).r;
+        
+        float noiseCenter = snoise(5.0 * vec2(v_Texcoord) + vec2(u_time, u_time));
+        float noiseRight = snoise(5.0 * vec2(v_Texcoord.s + 1.0/1024.0, v_Texcoord.t));
+        float noiseUp = snoise(1.0 * vec2(v_Texcoord.s, v_Texcoord.t + 1.0/512.0));
+        
+                
+        vec3 bumpNormal = normalize(vec3(bumpColorCenter - bumpColorRight, 
+                                            bumpColorCenter - bumpColorUp, 
+                                            0.2));
+        vec3 noiseNormal = normalize(vec3(noiseCenter - noiseRight, 
+                                            noiseCenter - noiseUp, 
+                                            0.2));
+        
+        mat3 transform = eastNorthUpToEyeCoordinates(v_positionMC, normal);
+        bumpNormal = normalize(transform * bumpNormal);
+        noiseNormal = normalize(transform * noiseNormal);
+        
+        
         float diffuse = clamp(dot(u_CameraSpaceDirLight, normal), 0.0, 1.0);
+        float bumpDiffuse = clamp(dot(u_CameraSpaceDirLight, bumpNormal), 0.0, 1.0);
+        float noiseDiffuse = clamp(dot(u_CameraSpaceDirLight, noiseNormal), 0.0, 1.0);
 
         vec3 toReflectedLight = reflect(-u_CameraSpaceDirLight, normal);
         float specular = max(dot(toReflectedLight, -eyeToPosition), 0.0);
         specular = pow(specular, 20.0);
 
-        float gammaCorrect = 1.0/1.2; //gamma correct by 1/1.2
+        float gammaCorrect = 0.9/1.2; //gamma correct by 1/1.2
 
         vec3 dayColor = texture2D(u_DayDiffuse, v_Texcoord).rgb;
         vec3 nightColor = texture2D(u_Night, v_Texcoord).rgb;
+        
+                  
+        //Clouds
+        vec2 cloudTex = vec2(v_Texcoord + vec2(-u_time/10.0, 0.0));
+        vec3 cloudColor = texture2D(u_Cloud, cloudTex).rgb;
+        vec3 cloudTrans = texture2D(u_CloudTrans, cloudTex).rgb;
+        
+        
         //apply gamma correction to nighttime texture
         nightColor = pow(nightColor,vec3(gammaCorrect));
+        nightColor = 1.5 * nightColor;
+        
+        //earthSpec.r < 0.01 --> earth
+        if (earthSpec.r < 0.1)
+           dayColor = ((0.6 * bumpDiffuse) + (0.5 * earthSpec.r * specular)) * dayColor;
+        else 
+        {
+            dayColor = ((0.6 * bumpDiffuse) + (0.4 * specular)) * dayColor;
+           //dayColor = ((0.6 * noiseDiffuse) + (0.4 * specular)) * dayColor;
+           //nightColor = (1.2 * noiseDiffuse) * nightColor; 
+        }
 
-        vec3 color = ((0.6 * diffuse) + (0.4 * specular)) * dayColor;
-        gl_FragColor = vec4(color, 1.0);
+            
+        dayColor = mix(cloudColor, dayColor, cloudTrans.r);
+        nightColor = mix(vec3(0.0), nightColor, cloudTrans.r);
+        
+        diffuse = clamp(diffuse * 5.0, 0.0, 1.0);
+        
+        vec3 color; 
+        color = mix (nightColor, dayColor, diffuse);
+
+        //Rim lighting
+        float rimFactor = dot(v_Normal, v_Position) + 1.0;
+        if (rimFactor > 1e-6)
+            color = color + vec3(rimFactor/6.0, rimFactor/2.0, rimFactor/2.0);
+
+         gl_FragColor = vec4(color, 1.0);
     }
 
     mat3 eastNorthUpToEyeCoordinates(vec3 positionMC, vec3 normalEC)
@@ -109,6 +170,93 @@
             bitangentEC.x, bitangentEC.y, bitangentEC.z,
             normalEC.x,    normalEC.y,    normalEC.z);
     }
+
+//
+// Description : Array and textureless GLSL 2D simplex noise function.
+// Author : Ian McEwan, Ashima Arts.
+// Maintainer : ijm
+// Lastmod : 20110822 (ijm)
+// License : Copyright (C) 2011 Ashima Arts. All rights reserved.
+// Distributed under the MIT License. See LICENSE file.
+// https://github.com/ashima/webgl-noise
+//
+vec3 mod289(vec3 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+vec2 mod289(vec2 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+vec3 permute(vec3 x) {
+    return mod289(((x*34.0)+1.0)*x);
+}
+float snoise(vec2 v)
+{
+    const vec4 C = vec4(0.211324865405187, // (3.0-sqrt(3.0))/6.0
+    0.366025403784439, // 0.5*(sqrt(3.0)-1.0)
+    -0.577350269189626, // -1.0 + 2.0 * C.x
+    0.024390243902439); // 1.0 / 41.0
+    // First corner
+    vec2 i = floor(v + dot(v, C.yy) );
+    vec2 x0 = v - i + dot(i, C.xx);
+    // Other corners
+    vec2 i1;
+    //i1.x = step( x0.y, x0.x ); // x0.x > x0.y ? 1.0 : 0.0
+    //i1.y = 1.0 - i1.x;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    // x0 = x0 - 0.0 + 0.0 * C.xx ;
+    // x1 = x0 - i1 + 1.0 * C.xx ;
+    // x2 = x0 - 1.0 + 2.0 * C.xx ;
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    // Permutations
+    i = mod289(i); // Avoid truncation effects in permutation
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+    + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+    // Gradients: 41 points uniformly over a line, mapped onto a diamond.
+    // The ring size 17*17 = 289 is close to a multiple of 41 (41*7 = 287)
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    // Normalise gradients implicitly by scaling m
+    // Approximation of: m *= inversesqrt( a0*a0 + h*h );
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    // Compute final noise value at P
+    vec3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+}
+
+bool sphereIntersectionTest(vec3 po, vec3 vo, vec3 sphereCenter, float sphereRadius, out float intersectionT)
+{
+  
+ 
+    float vDotDirection = dot(po, vo);
+    float radicand = vDotDirection * vDotDirection - (dot(po, po) - (sphereRadius * sphereRadius));
+    if (radicand < 0.0)
+       return false;
+  
+    float squareRoot = sqrt(radicand);
+    float firstTerm = -vDotDirection;
+    float t1 = firstTerm + squareRoot;
+    float t2 = firstTerm - squareRoot;
+  
+    float t = 0.0;
+    if (t1 < 0.0 && t2 < 0.0)
+       return false;
+    else if (t1 > 0.0 && t2 > 0.0) 
+	     t = min(t1, t2);  
+    else  
+	     t = max(t1, t);
+
+
+    intersectionT = t; 
+    return true; 
+}
 </script>
 
 <script src ="js/lib/gl-matrix.js" type ="text/javascript"></script>
@@ -117,3 +265,5 @@
 </body>
 
 </html>
+
+

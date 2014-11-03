@@ -17,11 +17,20 @@
     attribute vec2 position;
     
     uniform mat4 u_modelViewPerspective;
-    
+
+    varying vec4 v_color;
+
+    uniform vec4 u_minColor;
+    uniform vec4 u_maxColor;  
+    uniform float u_time;
+
     void main(void)
     {
-      // NOTE : according to the WebGL standard, 0.0f is not accepted
-		  float height = 0.0;
+       float s_contrib = sin(position.x*2.0*3.14159 + u_time);
+       float t_contrib = cos(position.y*2.0*3.14159 + u_time);
+       float height = s_contrib*t_contrib;
+                
+       v_color = mix(u_minColor, u_maxColor, (height+1.0)/2.0);
 
       // NOTE : gl_Position is always a vec4
 		  gl_Position = u_modelViewPerspective * vec4(vec3(position, height), 1.0);
@@ -31,13 +40,14 @@
 <script id="fs" type="x-shader/x-fragment">
     precision mediump float;
 
-    uniform vec4 u_color;
+    varying vec4 v_color;
 
     void main(void)
     {
       // NOTE : gl_FragColor is always a vec4
-		  gl_FragColor = u_color;
+		gl_FragColor = v_color;
     }    
+
 </script>
 
 <script>
@@ -45,7 +55,13 @@
   var positionLocation = 0;
   var heightLocation = 1;
   var u_modelViewPerspectiveLocation;
-  var u_color;
+  var min_color = [1.0, 0.0, 0.0, 1.0];
+  var max_color = [0.0, 1.0, 0.0, 1.0];
+  var time = 0.0;
+
+  var u_minColorLocation;
+  var u_maxColorLocation;
+  var u_timeLocation; 
   
   var heights;
   var numberOfIndices;
@@ -64,15 +80,38 @@
 
   var persp = mat4.create();
   var view = mat4.create();
+
+  var controller = function () {
+      this.minColor = [255, 0.0, 0.0, 1.0];
+      this.maxColor = [0.0, 255, 0.0, 1.0];
+  };
     
   // Function called when the window is loaded
-  window.onload = function() {
-    // Add GUI component 
-    var gui = new dat.GUI();
+  window.onload = function () {
+      // Add GUI component 
+      var gui = new dat.GUI();
+      
+      var control = new controller();
+      var minColorControl = gui.addColor(control, 'minColor').name('Min Color');
+      minColorControl.onChange(function () {         
+         for(var i = 0; i < 4; ++i){
+            min_color[i] = control.minColor[i]/255.0;
+            }
 
-    init();
+    });
 
-    animate();
+      var maxColorControl = gui.addColor(control, 'maxColor').name('Max Color');
+      maxColorControl.onChange(function () {
+        for (var i = 0; i < 4; ++i) {
+            max_color[i] = control.maxColor[i] / 255.0;
+        }
+
+    });
+   
+
+      init();
+
+      animate();
   };
 
   function init() {
@@ -98,7 +137,9 @@
   }
 
 
-  function animate(){
+  function animate() {
+
+    time += 0.01;
     // Update
     var model = mat4.create();
     mat4.identity(model);
@@ -111,7 +152,11 @@
     // Render  
     context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT);
 
-    context.uniformMatrix4fv(u_modelViewPerspectiveLocation, false, mvp); 
+    context.uniformMatrix4fv(u_modelViewPerspectiveLocation, false, mvp);
+    context.uniform4fv(u_minColorLocation, min_color);
+    context.uniform4fv(u_maxColorLocation, max_color);
+    context.uniform1f(u_timeLocation, time); 
+
     context.drawElements(context.LINES, numberOfIndices, context.UNSIGNED_SHORT,0);
 
     window.requestAnimFrame(animate);
@@ -122,10 +167,12 @@
     var vs = getShaderSource(document.getElementById("vs"));
     var fs = getShaderSource(document.getElementById("fs"));
 
-		var program = createProgram(context, vs, fs, message);
-		context.bindAttribLocation(program, positionLocation, "position");
-		u_modelViewPerspectiveLocation = context.getUniformLocation(program,"u_modelViewPerspective");
-    u_colorLocation = context.getUniformLocation(program, "u_color");
+	var program = createProgram(context, vs, fs, message);
+	context.bindAttribLocation(program, positionLocation, "position");
+	u_modelViewPerspectiveLocation = context.getUniformLocation(program,"u_modelViewPerspective");
+    u_minColorLocation = context.getUniformLocation(program, "u_minColor");
+    u_maxColorLocation = context.getUniformLocation(program, "u_maxColor");
+    u_timeLocation = context.getUniformLocation(program, "u_time");
 
     context.useProgram(program);
   }
@@ -207,6 +254,7 @@
 }
 
 </script>
+
 
 </body>
 
