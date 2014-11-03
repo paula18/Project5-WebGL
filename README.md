@@ -89,7 +89,7 @@ threshold to add a color to our original color.
 
 ![alt tag](https://github.com/paula18/Project5-WebGL/blob/master/seven.PNG)
 
-** Procedural water rendering and animation using noise**
+**Procedural water rendering and animation using noise**
 
 To animate the oceans I used Perlin noise. However, to achieve a more or less realistic effect 
 you really need to play with the values and I haven't found any that make the ocean look realistic.
